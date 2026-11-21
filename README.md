@@ -20,7 +20,8 @@
 
 | 파일 | 설명 |
 |---|---|
-| `read_permittivity_plot.py` | **메인 스크립트.** 설정 파일(JSON)을 읽어 어떤 그래프든 처리하는 범용 버전 |
+| `permittivity_digitizer.py` | ⭐ **통합 파일.** 컬러 모드 + 흑백 모드 + 설정(프리셋)을 모두 담은 한 파일. 이 파일 하나만 있으면 됨 (아래 "한 파일로 실행") |
+| `read_permittivity_plot.py` | 컬러 그래프용 스크립트. 설정 파일(JSON)을 읽어 어떤 그래프든 처리하는 범용 버전 |
 | `read_permittivity_plot_adapted.py` | 30–110 °C 그래프 1개 전용으로 축 값·색을 코드에 직접 적어 둔 **이전 버전**. 검은 곡선(x=0)은 처리하지 않음 |
 | `config_ba_sr.json` | (Ba₁₋ₓSrₓ)(Zr₀.₁Ti₀.₉)O₃ 그래프(−150~150 °C, x = 0.05~0.45, 5개 곡선)용 설정. **기본 설정** |
 | `config_dielectric_x1000.json` | 유전상수(×1000) vs T 그래프(30~110 °C, x = 0~0.09, 6개 곡선)용 설정 |
@@ -52,6 +53,43 @@ pip install -r requirements.txt
 - macOS / Linux에서는 `source .venv/bin/activate`를 씁니다.
 
 패키지: `numpy`, `Pillow`, `scipy`, `openpyxl`(엑셀 저장용). 목록은 [requirements.txt](requirements.txt)에 있습니다.
+
+---
+
+## 한 파일로 실행 (`permittivity_digitizer.py`)
+
+`read_permittivity_plot.py`(컬러), `bw_test`의 흑백 스크립트 5개, JSON 설정 2개를 **한 파일로 합친 것**입니다.
+설정(프리셋)이 파일 안에 들어 있어서, 이 파일과 그래프 이미지만 있으면 됩니다.
+기존 파일들과 **결과가 완전히 같은 것**을 확인했습니다(텍스트, 오버레이, 엑셀 데이터 모두 동일).
+
+| 모드 | 명령 | 하는 일 |
+|---|---|---|
+| `color` | `python permittivity_digitizer.py color 이미지.png --preset x1000` | 색으로 곡선 구분 → 피크·상온·최소 ε와 오차. 결과 txt, 오버레이 png, **엑셀(xlsx)** 저장 |
+| `bw` | `python permittivity_digitizer.py bw` | 흑백 그래프를 가이드 경로로 따라가서 → 엑셀(데이터+차트) + 검증 이미지 저장 |
+| `presets` | `python permittivity_digitizer.py presets --outdir 폴더` | 내장 설정을 JSON 파일로 꺼냄 → 새 그래프용 설정을 만들 때 복사해서 고침 |
+
+**컬러 모드 옵션**
+- `--preset ba_sr` (기본) 또는 `--preset x1000`: 내장 설정 사용
+- `--config 설정.json`: 직접 만든 설정 파일 사용(형식은 기존 `config_*.json`과 같음)
+- `--outdir 폴더`: 결과 저장 위치(기본: 이미지와 같은 폴더)
+
+**흑백 모드 옵션**
+- 옵션 없이 실행하면 내장된 BaTiO₃ 프리셋(Fig.1, Fig.2a~c)을 `bw_test` 폴더의 이미지로 실행
+- `--config 설정.json`: 다른 흑백 그래프용 설정(형식은 `presets`로 꺼낸 `preset_bw_BaTiO3.json` 참고)
+- `--images 폴더`: 설정에 적힌 이미지 파일이 있는 폴더
+- `--outdir 폴더`: 엑셀과 검증 이미지 저장 위치(기본: `--images` 폴더)
+
+예시:
+
+```powershell
+python permittivity_digitizer.py color "C:\Users\user\OneDrive\사진\화면 캡처 test.png" --preset x1000
+```
+
+```powershell
+python permittivity_digitizer.py bw --outdir 결과
+```
+
+설정 파일의 모든 항목은 `permittivity_digitizer.py` 맨 위 설명(docstring)에 정리되어 있습니다.
 
 ---
 
