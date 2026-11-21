@@ -1,0 +1,18 @@
+image  : C:\Users\user\OneDrive\문서\유전율_그래프_측정\새 폴더\10.1016_j.jeurceramsoc.2023.01.027_fig5.png
+config : C:\Users\user\AppData\Local\Temp\opencode\digitize_20261121\config_fig5_g.json
+calibration: 1.279 C/px, 86.7 eps/px; sigma = 1.5 px -> +-1.92 C, +-130 eps
+visible T range in the figure: -51.2 .. 195.7 C
+NOTE: requested min/max window -50..200 C is wider than the figure; using -50.0..195.7 C
+
+curve            | peak eps                         | peak T (C)       | eps @25C                         | min eps (-50..196C)             
+x=0 (black)      |    10098 +-  130 ( 1.3%) OK      |  -17.3 +- 1.9    |     2595 +-  173 ( 6.7%) OK      | n/a (곡선이 구간 전체에서 검출 안 됨: T=-50~182C) 읽기불가
+x=0.08 (red)     |     2378 +-  130 ( 5.5%) OK      |   48.3 +-122.8    |     2248 +-  130 ( 5.8%) OK      |     -138 +-  130 (94.2%) 읽기불가   
+x=0.1 (blue)     |     2031 +-  130 ( 6.4%) OK      |   37.7 +-120.9    |     1915 +-  131 ( 6.9%) OK      |     -138 +-  130 (94.2%) 읽기불가   
+x=0.12 (teal)    |     1510 +-  130 ( 8.6%) OK      |  -10.9 +-40.3    |     1467 +-  130 ( 8.9%) OK      | n/a (곡선이 구간 전체에서 검출 안 됨: T=-50~41C) 읽기불가
+x=0.15 (cyan)    | no pixels found
+x=0.2 (magenta)  |     1250 +-  130 (10.4%) OK      |  -10.3 +-40.9    |     1221 +-  131 (10.8%) OK      | n/a (곡선이 구간 전체에서 검출 안 됨: T=-50~194C) 읽기불가
+
+전체 최대(모든 곡선 중):    10098 +-  130 ( 1.3%) OK at T=-17.3 C  [x=0 (black)]
+전체 최소(모든 곡선 중): <=-1439 (축 하단에 닿음) 읽기불가
+
+overlay: C:\Users\user\AppData\Local\Temp\opencode\digitize_20261121\10.1016_j.jeurceramsoc.2023.01.027_fig5_overlay.png  (green cross + label = detected peak; gray box = search area; pink boxes = ignored areas; dots = detected curve centre)
