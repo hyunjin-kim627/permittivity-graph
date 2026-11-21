@@ -101,6 +101,8 @@ python make_excel.py
 
 새 흑백 그래프에 쓰려면 `calib.py`에 축 눈금 위치를, `curves_*.py`에 곡선 경로를 새로 적어야 합니다.
 
+👉 동작 원리, 주요 결과, 검증 이미지, 한계, 새 그래프에 적용하는 방법은 **[bw_test/README.md](bw_test/README.md)** 에 자세히 정리했습니다.
+
 ---
 
 ## 동작 원리
