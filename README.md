@@ -27,19 +27,31 @@
 | `화면 캡처 test_results.txt` | `config_dielectric_x1000.json`으로 돌린 결과 예시 |
 | `화면 캡처 test_overlay.png` | 위 결과의 오버레이 이미지(검출한 곡선과 피크 표시) |
 | `.gitignore` | 캐시, 가상환경, `.env`, Office 임시 파일 등을 Git에서 제외 |
+| `requirements.txt` | 필요한 파이썬 패키지 목록 |
+| `bw_test/` | **흑백 그래프용** 디지타이징 (아래 "흑백 그래프 읽기" 참고) |
 
 > 원본 그래프 이미지(`화면 캡처 test.png`)는 이 폴더가 아니라 `OneDrive\사진`에 있습니다.
 
 ---
 
-## 필요한 것
+## 설치 (처음 한 번)
 
-- Python 3
-- 패키지: `numpy`, `Pillow`, `scipy`
+Python 3.10 이상이 필요합니다. 아래 명령은 Windows PowerShell 기준입니다.
 
 ```powershell
-pip install numpy pillow scipy
+git clone https://github.com/hyunjin-kim627/permittivity-graph.git
+cd permittivity-graph
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
+
+- `.venv`는 이 프로젝트 전용 가상환경입니다. 다른 프로젝트의 패키지와 섞이지 않습니다. `.gitignore`에 들어 있어서 GitHub에는 올라가지 않습니다.
+- 다음부터는 터미널을 열 때마다 `.\.venv\Scripts\Activate.ps1`만 실행하면 됩니다.
+- `Activate.ps1` 실행이 막히면 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`를 한 번 실행하거나, 활성화하지 않고 `.\.venv\Scripts\python.exe`로 직접 실행하세요.
+- macOS / Linux에서는 `source .venv/bin/activate`를 씁니다.
+
+패키지: `numpy`, `Pillow`, `scipy`, `openpyxl`(엑셀 저장용). 목록은 [requirements.txt](requirements.txt)에 있습니다.
 
 ---
 
@@ -66,6 +78,28 @@ python -I read_permittivity_plot.py 이미지.png --config config_dielectric_x10
 
 **결과를 믿기 전에 꼭 오버레이 이미지를 눈으로 확인하세요.**
 색 규칙이 맞지 않으면 엉뚱한 픽셀을 곡선으로 잡을 수 있습니다.
+
+---
+
+## 흑백 그래프 읽기 (`bw_test/`)
+
+색으로 곡선을 구분할 수 없는 흑백 논문 그림(BaTiO₃ 입자 크기별 ε–T, Fig.1과 Fig.2 a·b·c)을 읽는 예제입니다.
+
+```powershell
+cd bw_test
+python make_excel.py
+```
+
+| 파일 | 설명 |
+|---|---|
+| `calib.py` | 각 그래프의 축 눈금 픽셀 위치 → 값 보정 |
+| `trace.py` | 가이드 경로 근처의 검은 선 픽셀을 열(급경사는 행) 단위로 따라가는 함수 |
+| `curves_fig1.py`, `curves_fig2.py` | 곡선별 대략적인 경로(가이드)와 무시할 영역(라벨, 화살표) |
+| `make_excel.py` | 위를 모두 실행해 엑셀과 검증 이미지를 만듦 |
+| `BaTiO3_흑백그래프_디지타이징.xlsx` | 결과: 설명 시트 + 그래프별 데이터 시트와 차트 |
+| `검증_Fig*.png` | 읽은 점을 원본 위에 색깔로 표시한 확인용 이미지 |
+
+새 흑백 그래프에 쓰려면 `calib.py`에 축 눈금 위치를, `curves_*.py`에 곡선 경로를 새로 적어야 합니다.
 
 ---
 
