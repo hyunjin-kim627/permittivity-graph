@@ -13,7 +13,16 @@ Two modes in one file:
 Usage
   python permittivity_digitizer.py color IMAGE.png [--preset ba_sr|x1000 | --config CONFIG.json] [--outdir DIR]
   python permittivity_digitizer.py bw [--config BW.json] [--images DIR] [--outdir DIR]
+  python permittivity_digitizer.py ticks IMAGE.png [--box top,bottom,left,right ...] [--outdir DIR]
   python permittivity_digitizer.py presets [--outdir DIR]      # write the built-in presets as JSON templates
+
+  ticks : step 1 for a NEW plot. Finds the rectangular plot frame(s) and the tick marks on each edge
+          (ticks that lie on an evenly spaced grid; curves/labels touching the frame are rejected).
+          Writes <image>_ticks.txt (pixel positions), <image>_ticks.png (frames + numbered ticks)
+          and <image>_ticks.json = a bw config draft: write the axis value of every tick into
+          x_ticks[1] / y_ticks[1], add the curves, then run `bw --config`.
+          The tick pixels can also be used in a color config as "points": [[pixel, value], ...].
+          If a frame is missed or wrong (e.g. a legend box, or axes without a closed frame), give it with --box.
 
   color without --preset/--config uses the built-in "ba_sr" preset.
   bw without --config runs the built-in BaTiO3 grain-size preset (Fig.1, Fig.2a-c);
@@ -882,6 +891,240 @@ def run_bw(args):
         print(f"excel : {xl}")
 
 
+# =============================================================================== TICKS mode
+def _line_segments(mask, min_len):
+    """Long dark runs along rows of `mask`, merged over adjacent rows -> [pos_lo, pos_hi, start, end]."""
+    segs = []
+    for i, row in enumerate(mask):
+        for a, z in _runs(row, merge=2):
+            if z - a + 1 >= min_len:
+                segs.append([i, i, int(a), int(z)])
+    merged = []
+    for s in segs:
+        for m in merged:
+            overlap = min(s[3], m[3]) - max(s[2], m[2])
+            if 0 <= s[0] - m[1] <= 1 and overlap > 0.8 * min(s[3] - s[2], m[3] - m[2]):
+                m[1] = s[0]
+                m[2], m[3] = min(m[2], s[2]), max(m[3], s[3])
+                break
+        else:
+            merged.append(list(s))
+    return merged
+
+
+def _band(m, line, horizontal, min_cov=0.3):
+    """Rows (or columns) near a detected line that really belong to it -> [lo, hi]."""
+    lo, hi, a, z = line
+    M = m if horizontal else m.T
+    rows = [q for q in range(max(lo - 2, 0), min(hi + 3, M.shape[0])) if M[q, a:z + 1].mean() >= min_cov]
+    return [min(rows), max(rows), a, z] if rows else list(line)
+
+
+def find_frames(d, min_frac=0.15, min_size=30):
+    """Rectangular plot frames: pairs of long horizontal + vertical lines that close a box.
+    `d` = dark mask (use a loose threshold: scanned frame lines are often gray and wander over 2 rows).
+    Returns [(top_line, bottom_line, left_line, right_line)], each line = [pos_lo, pos_hi, start, end]."""
+    H, W = d.shape
+    dh = d.copy()
+    dh[1:] |= d[:-1]                       # a line drifting between two rows still forms one long run
+    dv = d.copy()
+    dv[:, 1:] |= d[:, :-1]
+    hl = [_band(d, s, True) for s in _line_segments(dh, max(40, int(min_frac * W)))]
+    vl = [_band(d, s, False) for s in _line_segments(dv.T, max(40, int(min_frac * H)))]
+    rects = []
+    for t in hl:
+        for b in hl:
+            if b[0] - t[1] < min_size:
+                continue
+            for l in vl:
+                for r in vl:
+                    if r[0] - l[1] < min_size:
+                        continue
+                    if (t[2] <= l[1] + 3 and t[3] >= r[0] - 3 and b[2] <= l[1] + 3 and b[3] >= r[0] - 3 and
+                            l[2] <= t[1] + 3 and l[3] >= b[0] - 3 and r[2] <= t[1] + 3 and r[3] >= b[0] - 3):
+                        rects.append((t, b, l, r))
+
+    def inside(a, b):          # a strictly inside b (or equal box drawn by other lines)
+        return (a is not b and a[0][0] >= b[0][0] and a[1][1] <= b[1][1] and
+                a[2][0] >= b[2][0] and a[3][1] <= b[3][1])
+    rects = [r for r in rects if not any(inside(o, r) for o in rects)]
+    return sorted(rects, key=lambda r: (r[0][0] // 40, r[2][0]))
+
+
+def _edge_ticks(d, line, horizontal, span, direction, max_len=12):
+    """Tick candidates sticking out of one frame line. direction -1 / +1 = towards smaller / larger index."""
+    lo, hi = line[0], line[1]
+    start = lo - 1 if direction < 0 else hi + 1
+    lens = {}
+    for p in range(span[0] + 3, span[1] - 2):
+        n = 0
+        q = start
+        while 0 <= q < (d.shape[0] if horizontal else d.shape[1]) and n <= max_len + 1:
+            if not (d[q, p] if horizontal else d[p, q]):
+                break
+            n += 1
+            q += direction
+        if 2 <= n <= max_len:
+            lens[p] = n
+    cands = []
+    for g in _runs(np.array([p in lens for p in range(d.shape[1] if horizontal else d.shape[0])]), merge=0):
+        if g[1] - g[0] <= 3:                      # thin -> tick, wide -> a curve touching the frame
+            ps = list(range(g[0], g[1] + 1))
+            cands.append((round(float(np.mean(ps)), 1), max(lens[p] for p in ps)))
+    return cands
+
+
+def _spacing_fit(cands, tol=1.5, min_spacing=6):
+    """Largest subset of candidates lying on an evenly spaced grid. Returns (inliers, spacing).
+    The tolerance shrinks with the spacing (max 12 % of it) so a tiny spacing cannot 'fit' everything."""
+    pos = [c[0] for c in cands]
+    best = (0, 0.0, [])
+    for i in range(len(pos)):
+        for j in range(i + 1, len(pos)):
+            for m in range(1, j - i + 1):
+                s = (pos[j] - pos[i]) / m
+                if s < min_spacing:
+                    continue
+                t_ = min(tol, 0.12 * s)
+                slot = {}                                   # one tick per grid slot: the closest one
+                for c in cands:
+                    q = (c[0] - pos[i]) / s
+                    k, off = round(q), abs(q - round(q)) * s
+                    if off <= t_ and (k not in slot or off < slot[k][0]):
+                        slot[k] = (off, c)
+                if len(slot) < 3:
+                    continue
+                inl = [slot[k][1] for k in sorted(slot)]
+                empty = (max(slot) - min(slot) + 1) - len(slot)
+                score = len(slot) - 0.5 * empty             # half spacing would leave every other slot empty
+                if (score, s) > (best[0], best[1]):
+                    best = (score, s, inl)
+    if best[0] < 3:
+        return list(cands), None
+    inl = best[2]
+    for _ in range(2):                                  # refine: fit the grid, then re-pick the closest tick per slot
+        k = np.round((np.array([c[0] for c in inl]) - inl[0][0]) / best[1])
+        s, p0 = np.polyfit(k, [c[0] for c in inl], 1)
+        t_ = min(tol, 0.12 * s)
+        slot = {}
+        for c in cands:
+            q = (c[0] - p0) / s
+            kk, off = round(q), abs(c[0] - (p0 + round(q) * s))
+            if off <= t_ and (kk not in slot or off < slot[kk][0]):
+                slot[kk] = (off, c)
+        inl = [slot[kk][1] for kk in sorted(slot)]
+    return inl, float(s)
+
+
+def run_ticks(args):
+    path = args.image
+    stem = os.path.splitext(os.path.basename(path))[0]
+    outdir = args.outdir or os.path.dirname(os.path.abspath(path))
+    os.makedirs(outdir, exist_ok=True)
+    gray = load_gray(path)
+    d = gray < args.thr                    # ticks
+    H_, W_ = d.shape
+
+    if args.box:
+        frames = []
+        dl = gray < 200
+        for spec in args.box:
+            t, b, l, r = [int(v) for v in spec.split(",")]
+            frames.append((_band(dl, [t, t, l, r], True), _band(dl, [b, b, l, r], True),
+                           _band(dl, [l, l, t, b], False), _band(dl, [r, r, t, b], False)))
+    else:
+        frames = find_frames(gray < 200)
+    if not frames:
+        raise SystemExit("no rectangular plot frame found -> give it by hand: --box top,bottom,left,right")
+
+    ov = Image.open(path).convert("RGB").resize((W_ * 3, H_ * 3), Image.NEAREST)
+    dr = ImageDraw.Draw(ov)
+    jobs = []
+    lines = [f"image : {path}", f"found {len(frames)} plot frame(s)  (pixel = original image px; tick 'len' = length in px, "
+             f"long ticks are usually the labelled ones)", ""]
+    for n, (tl, bl, ll, rl) in enumerate(frames):
+        letter = chr(ord("a") + n)
+        top, bot = int(round((tl[0] + tl[1]) / 2)), int(round((bl[0] + bl[1]) / 2))
+        left, right = int(round((ll[0] + ll[1]) / 2)), int(round((rl[0] + rl[1]) / 2))
+        edges = {
+            "bottom": (bl, True, (left, right)), "top": (tl, True, (left, right)),
+            "left": (ll, False, (top, bot)), "right": (rl, False, (top, bot)),
+        }
+        found = {}
+        for name, (line, horiz, span) in edges.items():
+            best = None
+            for direction in (-1, 1):
+                cands = _edge_ticks(d, line, horiz, span, direction)
+                inl, s = _spacing_fit(cands)
+                inward = (name in ("bottom", "right")) == (direction < 0)
+                key = (s is not None, len(inl))
+                if best is None or key > best[0]:
+                    best = (key, inl, s, cands, "inward" if inward else "outward")
+            found[name] = best
+        lines.append(f"[panel {letter}]  box (top, bottom, left, right) = [{top}, {bot}, {left}, {right}]")
+        for name in ("bottom", "left", "top", "right"):
+            (_, inl, s, cands, side) = found[name]
+            if not cands:
+                lines.append(f"   {name:6s}: no ticks")
+                continue
+            sp = f"spacing {s:.2f} px" if s else "no even spacing found (check by eye)"
+            lines.append(f"   {name:6s}: {len(inl)} ticks ({side}), {sp}")
+            lines.append("            #   " + "  ".join(f"{i:>6d}" for i in range(len(inl))))
+            lines.append("            px  " + "  ".join(f"{c[0]:6.1f}" for c in inl))
+            lines.append("            len " + "  ".join(f"{c[1]:6d}" for c in inl))
+            rej = [c for c in cands if c not in inl]
+            if rej:
+                lines.append("            not on the even grid (curve/label?): " + ", ".join(f"{c[0]:.1f}" for c in rej))
+        lines.append("")
+
+        # overlay: frame (blue), ticks (red, numbered), rejected candidates (orange)
+        dr.rectangle([left * 3, top * 3, right * 3 + 2, bot * 3 + 2], outline=(0, 90, 255), width=2)
+        dr.text((left * 3 + 6, top * 3 + 4), f"panel {letter}", fill=(0, 90, 255))
+        for name in ("bottom", "left", "top", "right"):
+            (_, inl, s, cands, side) = found[name]
+            for c in cands:
+                p = c[0] * 3 + 1
+                colr = (230, 0, 0) if c in inl else (255, 150, 0)
+                if name in ("bottom", "top"):
+                    y = (bot if name == "bottom" else top) * 3 + 1
+                    dr.line([(p, y - 12), (p, y + 12)], fill=colr, width=2)
+                    if c in inl and name == "bottom":
+                        dr.text((p - 3, y + 14), str(inl.index(c)), fill=colr)
+                else:
+                    x = (left if name == "left" else right) * 3 + 1
+                    dr.line([(x - 12, p), (x + 12, p)], fill=colr, width=2)
+                    if c in inl and name == "left":
+                        dr.text((x + 14, p - 6), str(inl.index(c)), fill=colr)
+
+        xs = found["bottom"] if len(found["bottom"][1]) >= 2 else found["top"]
+        ys = found["left"] if len(found["left"][1]) >= 2 else found["right"]
+        jobs.append({
+            "sheet": f"panel_{letter}", "title": f"{stem} panel {letter}", "file": os.path.basename(path),
+            "x_ticks": [[c[0] for c in xs[1]], [None] * len(xs[1])],
+            "y_ticks": [[c[0] for c in ys[1]], [None] * len(ys[1])],
+            "box": [top, bot, left, right], "k": 4, "step": 1.0, "y_scale": 1000, "curves": {},
+            "_memo": "x_ticks[1] / y_ticks[1]: write the axis value of each tick (same order as the pixels; "
+                     "y pixels run top -> bottom). y_scale 1000 = y values written in units of 10^3. "
+                     "Remove ticks you cannot label from BOTH lists. Then add curves (see the file header).",
+            "_tick_lengths": {"x": [c[1] for c in xs[1]], "y": [c[1] for c in ys[1]]},
+        })
+
+    js = os.path.join(outdir, f"{stem}_ticks.json")
+    png = os.path.join(outdir, f"{stem}_ticks.png")
+    txt = os.path.join(outdir, f"{stem}_ticks.txt")
+    with open(js, "w", encoding="utf-8") as f:
+        json.dump({"title": stem, "excel": f"{stem}_trace.xlsx", "description": [], "notes": {}, "jobs": jobs},
+                  f, ensure_ascii=False, indent=1)
+    ov.save(png)
+    lines += [f"check image : {png}  (blue = frame, red = ticks on the even grid with their # number, "
+              f"orange = rejected)",
+              f"config draft: {js}  (fill in the tick values -> add curves -> run: bw --config ...)"]
+    text = "\n".join(lines)
+    print(text)
+    with open(txt, "w", encoding="utf-8") as f:
+        f.write(text + "\n")
+
+
 # =============================================================================== presets dump
 def run_presets(args):
     outdir = args.outdir or os.getcwd()
@@ -913,11 +1156,17 @@ def main():
     pb.add_argument("--images", help="folder with the images named in the config (default: bw_test next to this file)")
     pb.add_argument("--outdir", help="where the Excel file and check images are written (default: --images)")
 
+    pt = sub.add_parser("ticks", help="find plot frames and axis tick pixels -> report, check image, bw config draft")
+    pt.add_argument("image")
+    pt.add_argument("--box", action="append", help="frame given by hand: top,bottom,left,right (repeat for more panels)")
+    pt.add_argument("--thr", type=int, default=170, help="gray level below which a tick pixel counts as dark (default 170)")
+    pt.add_argument("--outdir", help="where the report/check image/config draft are written (default: next to the image)")
+
     pp = sub.add_parser("presets", help="write the built-in presets as JSON files (templates for new plots)")
     pp.add_argument("--outdir")
 
     args = ap.parse_args()
-    {"color": run_color, "bw": run_bw, "presets": run_presets}[args.mode](args)
+    {"color": run_color, "bw": run_bw, "ticks": run_ticks, "presets": run_presets}[args.mode](args)
 
 
 if __name__ == "__main__":

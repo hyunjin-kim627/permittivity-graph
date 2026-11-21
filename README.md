@@ -67,7 +67,17 @@ pip install -r requirements.txt
 |---|---|---|
 | `color` | `python permittivity_digitizer.py color 이미지.png --preset x1000` | 색으로 곡선 구분 → 피크·상온·최소 ε와 오차. 결과 txt, 오버레이 png, **엑셀(xlsx)** 저장 |
 | `bw` | `python permittivity_digitizer.py bw` | 흑백 그래프를 가이드 경로로 따라가서 → 엑셀(데이터+차트) + 검증 이미지 저장 |
+| `ticks` | `python permittivity_digitizer.py ticks 이미지.png --outdir 폴더` | **새 그래프의 1단계.** 그래프 테두리와 축 눈금 픽셀 위치를 자동으로 찾아서 → 결과 txt, 번호 붙인 확인 이미지, bw 설정 초안(JSON) 저장 |
 | `presets` | `python permittivity_digitizer.py presets --outdir 폴더` | 내장 설정을 JSON 파일로 꺼냄 → 새 그래프용 설정을 만들 때 복사해서 고침 |
+
+**새 흑백 그래프를 읽는 순서**
+1. `ticks`로 눈금 찾기 → `<이미지>_ticks.png`에서 빨간 눈금 번호와 그림의 숫자 라벨을 맞춰 봅니다.
+2. `<이미지>_ticks.json`의 `x_ticks[1]`, `y_ticks[1]`에 각 눈금의 값을 적습니다(`null` 자리, 픽셀과 같은 순서. y는 위→아래 순서. `y_scale` 1000이면 ×1000 단위로 적음). 라벨을 모르는 눈금은 두 목록에서 같이 지웁니다.
+3. 같은 파일의 `curves`에 곡선별 대략적인 경로(가이드)를 적습니다(형식은 `presets`로 꺼낸 `preset_bw_BaTiO3.json` 참고).
+4. `python permittivity_digitizer.py bw --config <이미지>_ticks.json --images 이미지폴더 --outdir 결과폴더`로 실행하고 `검증_*.png`를 확인합니다.
+
+- 그래프 테두리가 닫힌 사각형이 아니거나(축만 있는 그래프), 범례 상자를 그래프로 잘못 잡으면 `--box 위,아래,왼쪽,오른쪽`(픽셀)으로 직접 알려 줍니다. 여러 그래프면 `--box`를 여러 번 씁니다.
+- 컬러 모드 설정에도 찾은 눈금 픽셀을 `"points": [[픽셀, 값], ...]`로 그대로 쓸 수 있습니다.
 
 **컬러 모드 옵션**
 - `--preset ba_sr` (기본) 또는 `--preset x1000`: 내장 설정 사용

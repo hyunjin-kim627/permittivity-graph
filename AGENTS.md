@@ -45,9 +45,16 @@ python permittivity_digitizer.py color "이미지.png" --preset x1000 --outdir �
 # 흑백 그래프 (내장 BaTiO3 프리셋, 이미지는 bw_test 폴더에서 찾음)
 python permittivity_digitizer.py bw --outdir 결과
 
+# 새 그래프 1단계: 테두리와 축 눈금 픽셀 자동 검출 -> txt, 번호 붙인 확인 이미지, bw 설정 초안 JSON
+python permittivity_digitizer.py ticks "이미지.png" --outdir 결과
+
 # 내장 프리셋을 JSON으로 내보내기 (새 그래프 설정의 템플릿)
 python permittivity_digitizer.py presets --outdir 설정
 ```
+
+- **새 그래프는 `ticks`부터 하세요.** 눈금 픽셀을 별도 스크립트로 찾지 마세요. 사람(또는 에이전트)이 할 일은 ① 확인 이미지의 눈금 번호와 그림 라벨을 맞춰 `x_ticks[1]`/`y_ticks[1]`에 값 적기, ② 곡선 가이드 적기, 두 가지뿐입니다.
+- `ticks`는 닫힌 사각형 테두리만 찾습니다. 범례 상자를 그래프로 잡거나 축만 있는 그래프면 `--box top,bottom,left,right`를 쓰세요. 확인 이미지를 반드시 열어 보세요.
+- 가이드는 사람이 눈으로 정하는 값입니다. 결과를 보고할 때 "숫자는 픽셀에서 읽었고, 어느 선이 어느 곡선인지는 판단"이라는 점을 구분해서 말하세요.
 
 - 컬러 모드 예제 이미지는 저장소에 없습니다. 사용자 PC의 `C:\Users\user\OneDrive\사진\화면 캡처 test.png`(x1000 프리셋용)와 `새 폴더\화면 캡처 2026-11-15 220459.png`(ba_sr 프리셋용)에 있습니다.
 - 흑백 모드 예제 이미지는 `bw_test/fig1_BaTiO3_grainsize.png`, `bw_test/fig2_BaTiO3_3transitions.png`에 있습니다.
