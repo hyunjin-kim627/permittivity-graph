@@ -26,7 +26,8 @@
 | `config_ba_sr.json` | (Ba₁₋ₓSrₓ)(Zr₀.₁Ti₀.₉)O₃ 그래프(−150~150 °C, x = 0.05~0.45, 5개 곡선)용 설정. **기본 설정** |
 | `config_dielectric_x1000.json` | 유전상수(×1000) vs T 그래프(30~110 °C, x = 0~0.09, 6개 곡선)용 설정 |
 | `화면 캡처 test_results.txt` | `config_dielectric_x1000.json`으로 돌린 결과 예시 |
-| `화면 캡처 test_overlay.png` | 위 결과의 오버레이 이미지(검출한 곡선과 피크 표시) |
+| `새 폴더/` | 논문 그림 캡처 이미지(zhuang1987, kinoshita1976, jeurceramsoc 2023 fig5, 화면 캡처 등). 위 결과의 오버레이 `화면 캡처 test_overlay.png`도 여기로 옮김. **논문 원문 PDF는 저작권 때문에 올리지 않음**(`.gitignore`) |
+| `digitize_20261121/` | 2026-11-21 디지타이징 결과. `*_claude` 파일은 Claude Code가 만든 결과 |
 | `.gitignore` | 캐시, 가상환경, `.env`, Office 임시 파일 등을 Git에서 제외 |
 | `requirements.txt` | 필요한 파이썬 패키지 목록 |
 | `bw_test/` | **흑백 그래프용** 디지타이징 (아래 "흑백 그래프 읽기" 참고) |
